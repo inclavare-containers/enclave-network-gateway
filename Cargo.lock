@@ -184,6 +184,7 @@ dependencies = [
  "anyhow",
  "clap",
  "futures",
+ "rats-tls-sys",
  "tokio",
  "tun",
 ]
@@ -366,6 +367,10 @@ checksum = "3bcdf212e9776fbcb2d23ab029360416bb1706b1aea2d1a5ba002727cbcab804"
 dependencies = [
  "proc-macro2",
 ]
+
+[[package]]
+name = "rats-tls-sys"
+version = "0.1.0"
 
 [[package]]
 name = "redox_syscall"
