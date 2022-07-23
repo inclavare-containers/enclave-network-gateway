@@ -2,4 +2,9 @@
 
 members = [
     "gw-client",
+    "rats-tls-sys"
+]
+
+exclude = [
+    "deps"
 ]
