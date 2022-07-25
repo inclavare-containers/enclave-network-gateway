@@ -1,7 +1,8 @@
 [workspace]
 
 members = [
-    "gw-client",
+    "entg",
+    "enta",
     "rats-tls-sys"
 ]
 
