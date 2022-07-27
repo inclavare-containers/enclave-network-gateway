@@ -18,7 +18,7 @@ use tun::{AsyncDevice, Layer, TunPacket};
 #[clap(author, version, about, long_about = None)]
 struct Args {
     /// Host address and port of ENTG
-    #[clap(long, value_parser, default_value = "127.0.0.1:6979")]
+    #[clap(long, value_parser, default_value = "127.0.0.1:6980")]
     entg_addr: String,
 
     /// Set address for tun device
