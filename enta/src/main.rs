@@ -4,7 +4,7 @@ mod packet;
 use std::net::IpAddr;
 
 use anyhow::{Context, Result};
-use clap::Parser;
+use clap::{Parser, ValueEnum};
 use futures::{SinkExt, StreamExt};
 use log::{error, info};
 use tokio::sync::mpsc;
@@ -31,6 +31,17 @@ struct Args {
     /// Set network mask for tun device
     #[clap(long, value_parser, default_value = "255.255.255.0")]
     tun_mask: IpAddr,
+
+    ///
+    #[clap(long, value_parser)]
+    mode: EntaMode,
+}
+
+// TODO: Do not distinguish between client and server
+#[derive(ValueEnum, Copy, Clone, Debug)]
+pub enum EntaMode {
+    Client,
+    Server,
 }
 
 #[tokio::main]
@@ -41,7 +52,7 @@ async fn main() -> Result<()> {
 
     let args = Args::parse();
     let stream = connect_to_entg(&args.entg_addr).await?;
-    let dev = capture::tun::setup_tun(args.tun_addr, args.tun_mask).await?;
+    let dev = capture::tun::setup_tun(args.tun_addr, args.tun_mask, args.mode).await?;
 
     let (outcome_tx, outcome_rx) = mpsc::channel(128);
     let (income_tx, income_rx) = mpsc::channel(128);
