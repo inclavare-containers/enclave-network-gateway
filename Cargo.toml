@@ -3,7 +3,7 @@
 members = [
     "entg",
     "enta",
-    "rats-tls-sys"
+    "rats-tls"
 ]
 
 exclude = [
