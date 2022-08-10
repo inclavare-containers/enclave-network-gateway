@@ -26,7 +26,7 @@ tmux send-keys -t eng:0.2 \
     "exec ip netns exec entg_c bash" ENTER \
         'PS1=(entg_c)${PS1}' ENTER \
         "sleep 7" ENTER \
-        "$(dirname $0)/../target/debug/entg --peer-addr 10.0.0.2:6979 --listen-enta 6980" ENTER
+        "$(dirname $0)/../target/debug/entg-host --peer-addr 10.0.0.2:6979 --listen-enta 6980" ENTER
 tmux send-keys -t eng:0.3 \
     "exec ip netns exec entg_s bash" ENTER \
         'PS1=(entg_s)${PS1}' ENTER \

@@ -1,3 +1,4 @@
+
 .PHONY: build
 build: entg-occlum entg-host enta
 
@@ -43,6 +44,10 @@ rats-tls-clean:
 	cd deps/rats-tls; \
 		rm -rf build build-occlum build-host; \
 		rm -rf src/external/sgx-ssl/intel-sgx-ssl src/external/sgx-ssl/*.cmake src/external/sgx-ssl/*.sh
+
+.PHONY: demo
+demo: build
+	scripts/run_tmux.sh
 
 .PHONY: clean
 clean: rats-tls-clean
