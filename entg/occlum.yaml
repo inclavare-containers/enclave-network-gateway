@@ -4,4 +4,67 @@ targets:
   - target: /bin
     copy:
       - files:
-        - ../../target/x86_64-unknown-linux-musl/debug/entg
+          - name: ../../target/debug/entg-occlum
+  - target: /opt/occlum/glibc/lib/
+    copy:
+      - from: /usr/lib/x86_64-linux-gnu/
+        files:
+          - name: libgcc_s.so.1
+            autodep: false
+      - from: /opt/occlum/glibc/lib/
+        files:
+          - name: libpthread.so.0
+            autodep: false
+          - name: libm.so.6
+            autodep: false
+          - name: libdl.so.2
+            autodep: false
+          - name: libc.so.6
+            autodep: false
+  - target: /usr/local/lib/rats-tls/crypto-wrappers
+    copy:
+      - from: ../../deps/rats-tls/build-occlum/src/crypto_wrappers
+        files:
+          - openssl/libcrypto_wrapper_openssl.so
+          - openssl/libcrypto_wrapper_openssl.so.0
+          - openssl/libcrypto_wrapper_openssl.so.0.6.4
+          - nullcrypto/libcrypto_wrapper_nullcrypto.so
+          - nullcrypto/libcrypto_wrapper_nullcrypto.so.0
+          - nullcrypto/libcrypto_wrapper_nullcrypto.so.0.6.4
+  - target: /usr/local/lib/rats-tls/attesters/
+    copy:
+      - from: ../../deps/rats-tls/build-occlum/src/attesters
+        files:
+          - sgx-ecdsa/libattester_sgx_ecdsa.so
+          - sgx-ecdsa/libattester_sgx_ecdsa.so.0
+          - sgx-ecdsa/libattester_sgx_ecdsa.so.0.6.4
+          - nullattester/libattester_nullattester.so
+          - nullattester/libattester_nullattester.so.0
+          - nullattester/libattester_nullattester.so.0.6.4
+  - target: /usr/local/lib/rats-tls/verifiers/
+    copy:
+      - from: ../../deps/rats-tls/build-occlum/src/verifiers
+        files:
+          - nullverifier/libverifier_nullverifier.so
+          - nullverifier/libverifier_nullverifier.so.0
+          - nullverifier/libverifier_nullverifier.so.0.6.4
+          - sgx-ecdsa-qve/libverifier_sgx_ecdsa_qve.so
+          - sgx-ecdsa-qve/libverifier_sgx_ecdsa_qve.so.0
+          - sgx-ecdsa-qve/libverifier_sgx_ecdsa_qve.so.0.6.4
+  - target: /usr/local/lib/rats-tls/tls-wrappers/
+    copy:
+      - from: ../../deps/rats-tls/build-occlum/src/tls_wrappers
+        files:
+          - nulltls/libtls_wrapper_nulltls.so.0.6.4
+          - nulltls/libtls_wrapper_nulltls.so.0
+          - nulltls/libtls_wrapper_nulltls.so
+          - openssl/libtls_wrapper_openssl.so.0.6.4
+          - openssl/libtls_wrapper_openssl.so
+          - openssl/libtls_wrapper_openssl.so.0
+  - target: /usr/local/lib/rats-tls
+    copy:
+      - from: ../../deps/rats-tls/build-occlum/src
+        files:
+          - librats_tls.so
+          - librats_tls.so.0
+          - librats_tls.so.0.6.4
