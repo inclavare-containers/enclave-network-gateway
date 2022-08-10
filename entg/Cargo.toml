@@ -18,3 +18,11 @@ num_enum = "0.5.7"
 lazy_static = "1.4.0"
 rats-tls = { path = "../rats-tls" }
 
+
+[build-dependencies]
+cfg-if = "0.1"
+
+[features]
+default = ["host"]
+occlum = []
+host = []
