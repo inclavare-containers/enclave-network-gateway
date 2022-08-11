@@ -20,20 +20,20 @@ use tokio_util::io::SyncIoBridge;
 #[clap(group(
     ArgGroup::new("vers")
         .required(true)
-        .args(&["peer-addr", "listen-entg"]),
+        .args(&["entg-connect", "entg-listen"]),
 ))]
 struct Args {
     /// Host address and port of another ENTG, e.g. "172.17.0.1:6979"
     #[clap(long, value_parser)]
-    peer_addr: Option<String>,
+    entg_connect: Option<String>,
 
     /// Listen port for another ENTG Server
     #[clap(long, value_parser, default_value_t = 6979)]
-    listen_entg: u16,
+    entg_listen: u16,
 
     /// Listen port for ENTA Agent
     #[clap(long, value_parser, default_value_t = 6980)]
-    listen_enta: u16,
+    enta_listen: u16,
 }
 
 #[tokio::main]
@@ -44,12 +44,13 @@ async fn main() -> Result<()> {
 
     let args = Args::parse();
 
-    let task1 = get_enta_stream(args.listen_enta);
+    let task1 = get_enta_stream(args.enta_listen);
     tokio::pin!(task1);
 
     let task2 = async {
-        let is_server = args.peer_addr.is_none();
-        let tcp_stream = get_entg_stream(args.peer_addr, args.listen_entg).await?;
+        // TODO: replace `is_server` with the options to select attester and verifier
+        let is_server = args.entg_connect.is_none();
+        let tcp_stream = get_entg_stream(args.entg_connect, args.entg_listen).await?;
         upgrade_to_rats_tls(tcp_stream, is_server).await
     };
     tokio::pin!(task2);
@@ -179,11 +180,11 @@ async fn upgrade_to_rats_tls(stream: TcpStream, server: bool) -> Result<DuplexSt
     Ok(s2)
 }
 
-async fn get_entg_stream(peer_addr: Option<String>, entg_listen_port: u16) -> Result<TcpStream> {
-    Result::<TcpStream>::Ok(match peer_addr {
-        Some(peer_addr) => {
-            info!("Connect to the peer ENTG: {}", peer_addr);
-            let stream = connect_to(peer_addr).await?;
+async fn get_entg_stream(entg_connect: Option<String>, entg_listen_port: u16) -> Result<TcpStream> {
+    Result::<TcpStream>::Ok(match entg_connect {
+        Some(entg_connect) => {
+            info!("Connect to the peer ENTG: {}", entg_connect);
+            let stream = connect_to(entg_connect).await?;
             info!("Connection established with ENTG: {}", stream.peer_addr()?);
             stream
         }
