@@ -1,19 +1,14 @@
-use std::{
-    io::{Read, Write},
-    os::unix::prelude::AsRawFd,
-    sync::Arc,
-};
+use std::pin::Pin;
 
 use anyhow::{anyhow, Context, Result};
 use clap::{ArgGroup, Parser};
-use log::{error, info};
+use log::info;
 use rats_tls::RatsTls;
 // use rats_tls_sys::*;
 use tokio::{
-    io::DuplexStream,
+    io::{AsyncRead, AsyncWrite, DuplexStream},
     net::{TcpListener, TcpStream},
 };
-use tokio_util::io::SyncIoBridge;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -34,7 +29,20 @@ struct Args {
     /// Listen port for ENTA Agent
     #[clap(long, value_parser, default_value_t = 6980)]
     enta_listen: u16,
+
+    /// Establish rats-tls connection with entg
+    #[clap(long, value_parser, default_value_t = false)]
+    entg_rats_tls: bool,
+
+    /// Establish rats-tls connection with enta
+    #[clap(long, value_parser, default_value_t = false)]
+    enta_rats_tls: bool,
 }
+
+trait AsyncStream: AsyncRead + AsyncWrite {}
+
+impl AsyncStream for DuplexStream {}
+impl AsyncStream for TcpStream {}
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -44,14 +52,28 @@ async fn main() -> Result<()> {
 
     let args = Args::parse();
 
-    let task1 = get_enta_stream(args.enta_listen);
+    let task1 = async {
+        let tcp_stream = get_enta_stream(args.enta_listen).await?;
+        let stream: Pin<Box<dyn AsyncStream>> = if args.enta_rats_tls {
+            Box::pin(upgrade_to_rats_tls(tcp_stream, true).await?)
+        } else {
+            Box::pin(tcp_stream)
+        };
+        Result::<_, anyhow::Error>::Ok(stream)
+    };
+
     tokio::pin!(task1);
 
     let task2 = async {
         // TODO: replace `is_server` with the options to select attester and verifier
         let is_server = args.entg_connect.is_none();
         let tcp_stream = get_entg_stream(args.entg_connect, args.entg_listen).await?;
-        upgrade_to_rats_tls(tcp_stream, is_server).await
+        let stream: Pin<Box<dyn AsyncStream>> = if args.entg_rats_tls {
+            Box::pin(upgrade_to_rats_tls(tcp_stream, is_server).await?)
+        } else {
+            Box::pin(tcp_stream)
+        };
+        Result::<_, anyhow::Error>::Ok(stream)
     };
     tokio::pin!(task2);
 
@@ -69,8 +91,11 @@ async fn main() -> Result<()> {
         }
     }
 
-    let (mut enta_r, mut enta_w) = tokio::io::split(enta_stream.unwrap());
-    let (mut entg_r, mut entg_w) = tokio::io::split(entg_stream.unwrap());
+    let enta_stream = enta_stream.unwrap();
+    let entg_stream = entg_stream.unwrap();
+
+    let (mut enta_r, mut enta_w) = tokio::io::split(enta_stream);
+    let (mut entg_r, mut entg_w) = tokio::io::split(entg_stream);
 
     info!("Start forwarding");
 

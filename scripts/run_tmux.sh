@@ -26,11 +26,11 @@ tmux send-keys -t eng:0.2 \
     "exec ip netns exec entg_c bash" ENTER \
         'PS1=(entg_c)${PS1}' ENTER \
         "sleep 7" ENTER \
-        "$(dirname $0)/../target/debug/entg-host --entg-connect 10.0.0.2:6979 --enta-listen 6980" ENTER
+        "$(dirname $0)/../target/debug/entg-host --entg-rats-tls --entg-connect 10.0.0.2:6979 --enta-listen 6980" ENTER
 tmux send-keys -t eng:0.3 \
     "exec ip netns exec entg_s bash" ENTER \
         'PS1=(entg_s)${PS1}' ENTER \
-        "$(dirname $0)/../entg/run_on_occlum.sh --entg-listen 6979 --enta-listen 6980" ENTER
+        "$(dirname $0)/../entg/run_on_occlum.sh --entg-rats-tls --entg-listen 6979 --enta-listen 6980" ENTER
 
 tmux a -t eng
 
