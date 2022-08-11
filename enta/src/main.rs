@@ -22,7 +22,7 @@ use packet::ENPacket;
 struct Args {
     /// Host address and port of ENTG
     #[clap(long, value_parser, default_value = "127.0.0.1:6980")]
-    entg_addr: String,
+    entg_connect: String,
 
     /// Set address for tun device
     #[clap(long, value_parser, default_value = "192.168.0.1")]
@@ -51,7 +51,7 @@ async fn main() -> Result<()> {
     );
 
     let args = Args::parse();
-    let stream = connect_to_entg(&args.entg_addr).await?;
+    let stream = connect_to_entg(&args.entg_connect).await?;
     let dev = capture::tun::setup_tun(args.tun_addr, args.tun_mask, args.mode).await?;
 
     let (outcome_tx, outcome_rx) = mpsc::channel(128);
@@ -63,11 +63,11 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-async fn connect_to_entg(entg_addr: &str) -> Result<TcpStream> {
+async fn connect_to_entg(entg_connect: &str) -> Result<TcpStream> {
     info!("Connecting to ENTG");
-    let stream = TcpStream::connect(entg_addr)
+    let stream = TcpStream::connect(entg_connect)
         .await
-        .with_context(|| format!("Falied to connect to ENTG: {}", entg_addr))?;
+        .with_context(|| format!("Falied to connect to ENTG: {}", entg_connect))?;
     info!(
         "Connection with ENTG is established, peer address: {}",
         stream.peer_addr()?
