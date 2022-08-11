@@ -3,18 +3,15 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 use foreign_types::{ForeignType, ForeignTypeRef, Opaque};
-use std::future::Future;
-use std::io::{ErrorKind, Read};
-use std::net::TcpStream;
+use std::io::{Read, Write};
 use std::ops::{Deref, DerefMut};
 use std::os::unix::io::RawFd;
 use std::os::unix::prelude::AsRawFd;
-use std::pin::Pin;
 use std::ptr::NonNull;
 use std::sync::Arc;
-use std::task::Poll;
-use tokio::io::AsyncRead;
-use tokio::task::JoinHandle;
+use tokio::io::DuplexStream;
+use tokio::net::TcpStream;
+use tokio_util::io::SyncIoBridge;
 
 mod ffi;
 use ffi::*;
@@ -110,7 +107,6 @@ impl RatsTls {
 
         let mut handle: rats_tls_handle = unsafe { std::mem::zeroed() };
         let mut tls: *mut rats_tls_handle = &mut handle;
-        println!("rats_tls_init() here");
         let err = unsafe { rats_tls_init(&conf, &mut tls) };
         if err != RATS_TLS_ERR_NONE {
             // error!("rats_tls_init() failed");
@@ -123,6 +119,81 @@ impl RatsTls {
         } else {
             Err(err)
         }
+    }
+
+    pub async fn negotiate_async(self, stream: TcpStream) -> std::io::Result<DuplexStream> {
+        // Convert to std::net::TcpStream, then set socket to non-block
+        let std_tcp_stream = stream.into_std().and_then(|std_tcp_stream| {
+            std_tcp_stream
+                .set_nonblocking(false)
+                .and(Ok(std_tcp_stream))
+        })?;
+
+        let rats_tls_session = Arc::new((self, std_tcp_stream));
+
+        {
+            let rats_tls_session = rats_tls_session.clone();
+            tokio::task::spawn_blocking(move || {
+                rats_tls_session
+                    .0
+                    .negotiate(rats_tls_session.1.as_raw_fd())
+                    .map_err(|err| {
+                        std::io::Error::new(
+                            std::io::ErrorKind::Other,
+                            format!("rats-tls error code: {}", err),
+                        )
+                    })
+            })
+            .await??;
+        }
+
+        // TODO: Introduce async mode for librats_tls.so to replace spawn_blocking
+        let (s1, s2) = tokio::io::duplex(1024);
+
+        let (rh, wh) = tokio::io::split(s1);
+
+        {
+            let rats_tls_session = rats_tls_session.clone();
+            tokio::task::spawn_blocking(move || {
+                let mut rh = SyncIoBridge::new(rh);
+                let mut buf = vec![0; 1024];
+                while let Ok(r_len) = rh.read(&mut buf) {
+                    let mut w_off = 0;
+                    while w_off < r_len {
+                        match rats_tls_session.0.transmit(&buf[w_off..r_len]) {
+                            Ok(w_len) => w_off += w_len,
+                            Err(_err) => {
+                                // TODO: Better way to show error message
+                                // error!("Failed in rats-tls teansmit(): error {}", err);
+                                return;
+                            }
+                        };
+                    }
+                }
+            });
+        }
+        {
+            tokio::task::spawn_blocking(move || {
+                let mut wh = SyncIoBridge::new(wh);
+                let mut buf = vec![0; 1024];
+                loop {
+                    match rats_tls_session.0.receive(&mut buf) {
+                        Ok(r_len) => {
+                            if wh.write_all(&buf[..r_len]).is_err() {
+                                return;
+                            }
+                        }
+                        Err(_err) => {
+                            // TODO: Better way to show error message
+                            // error!("Failed in rats-tls receive(): error {}", err);
+                            return;
+                        }
+                    };
+                }
+            });
+        }
+
+        Ok(s2)
     }
 
     pub fn negotiate(&self, fd: RawFd) -> Result<(), rats_tls_err_t> {

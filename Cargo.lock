@@ -493,6 +493,7 @@ version = "0.1.0"
 dependencies = [
  "foreign-types",
  "tokio",
+ "tokio-util 0.7.3",
 ]
 
 [[package]]
