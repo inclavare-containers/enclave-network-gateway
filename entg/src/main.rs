@@ -114,70 +114,9 @@ async fn upgrade_to_rats_tls(stream: TcpStream, server: bool) -> Result<DuplexSt
     }
     .map_err(|err| anyhow!("Failed to init rats-tls: error {:#x}", err))?;
 
-    // Convert to std::net::TcpStream, then set socket to non-block
-    let std_tcp_stream = stream.into_std().and_then(|std_tcp_stream| {
-        std_tcp_stream
-            .set_nonblocking(false)
-            .and(Ok(std_tcp_stream))
-    })?;
-
-    let rats_tls_session = Arc::new((tls, std_tcp_stream));
-
-    {
-        let rats_tls_session = rats_tls_session.clone();
-        tokio::task::spawn_blocking(move || {
-            rats_tls_session
-                .0
-                .negotiate(rats_tls_session.1.as_raw_fd())
-                .map_err(|err| anyhow!("Failed in rats-tls negotiate: error {}", err))
-        })
-        .await??;
-    }
-
-    let (s1, s2) = tokio::io::duplex(1024);
-
-    let (rh, wh) = tokio::io::split(s1);
-
-    {
-        let rats_tls_session = rats_tls_session.clone();
-        tokio::task::spawn_blocking(move || {
-            let mut rh = SyncIoBridge::new(rh);
-            let mut buf = vec![0; 1024];
-            while let Ok(r_len) = rh.read(&mut buf) {
-                let mut w_off = 0;
-                while w_off < r_len {
-                    match rats_tls_session.0.transmit(&buf[w_off..r_len]) {
-                        Ok(w_len) => w_off += w_len,
-                        Err(err) => {
-                            error!("Failed in rats-tls teansmit(): error {}", err);
-                            return;
-                        }
-                    };
-                }
-            }
-        });
-    }
-    {
-        tokio::task::spawn_blocking(move || {
-            let mut wh = SyncIoBridge::new(wh);
-            let mut buf = vec![0; 1024];
-            loop {
-                match rats_tls_session.0.receive(&mut buf) {
-                    Ok(r_len) => {
-                        if wh.write_all(&buf[..r_len]).is_err() {
-                            return;
-                        }
-                    }
-                    Err(err) => {
-                        error!("Failed in rats-tls receive(): error {}", err);
-                        return;
-                    }
-                };
-            }
-        });
-    }
-
-    Ok(s2)
+    tls.negotiate_async(stream)
+        .await
+        .context("Failed in rats-tls negotiation")
 }
 
 async fn get_entg_stream(entg_connect: Option<String>, entg_listen_port: u16) -> Result<TcpStream> {
