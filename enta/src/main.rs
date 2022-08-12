@@ -8,7 +8,6 @@ use clap::{Parser, ValueEnum};
 use futures::{SinkExt, StreamExt};
 use log::{error, info};
 use tokio::sync::mpsc;
-use tokio::task::JoinHandle;
 use tokio::{
     net::TcpStream,
     sync::mpsc::{Receiver, Sender},
@@ -56,11 +55,11 @@ async fn main() -> Result<()> {
 
     let (outcome_tx, outcome_rx) = mpsc::channel(128);
     let (income_tx, income_rx) = mpsc::channel(128);
-    let handle1 = exchange_with_entg(stream, income_tx, outcome_rx).await?;
-    let handle2 = capture::tun::exchange_with_tun(dev, outcome_tx, income_rx).await?;
+    let task1 = exchange_with_entg(stream, income_tx, outcome_rx);
+    let task2 = capture::tun::exchange_with_tun(dev, outcome_tx, income_rx);
 
-    let (_first, _second) = tokio::join!(handle1, handle2);
-    Ok(())
+    let (first, second) = tokio::join!(task1, task2);
+    first.and(second)
 }
 
 async fn connect_to_entg(entg_connect: &str) -> Result<TcpStream> {
@@ -79,7 +78,8 @@ async fn exchange_with_entg(
     stream: TcpStream,
     income_tx: Sender<ENPacket>,
     mut outcome_rx: Receiver<ENPacket>,
-) -> Result<JoinHandle<()>> {
+) -> Result<()>
+{
     let (mut split_sink, mut split_stream) =
         Framed::new(stream, LengthDelimitedCodec::new()).split();
     let to_entg = async move {
@@ -121,11 +121,10 @@ async fn exchange_with_entg(
             }
         }
     };
-    Ok(tokio::spawn(async {
-        // Stop another when one of then finished
-        tokio::select! {
-            _ = to_entg => {},
-            _ = from_entg  => {}
-        };
-    }))
+    // Stop another when one of then finished
+    tokio::select! {
+        _ = to_entg => {},
+        _ = from_entg  => {}
+    }
+    Ok(())
 }

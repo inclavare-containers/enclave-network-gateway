@@ -6,7 +6,6 @@ use futures::{SinkExt, StreamExt};
 use log::{debug, error, info};
 use tokio::process::Command;
 use tokio::sync::mpsc::{Receiver, Sender};
-use tokio::task::JoinHandle;
 use tun::{AsyncDevice, Layer, TunPacket};
 
 use crate::packet::ENPacket;
@@ -78,7 +77,7 @@ pub async fn exchange_with_tun(
     dev: AsyncDevice,
     outcome_tx: Sender<ENPacket>,
     mut income_rx: Receiver<ENPacket>,
-) -> Result<JoinHandle<()>> {
+) -> Result<()> {
     let (mut split_sink, mut split_stream) = dev.into_framed().split();
 
     let to_tun = async move {
@@ -119,11 +118,10 @@ pub async fn exchange_with_tun(
         }
     };
 
-    Ok(tokio::spawn(async {
-        // Stop another when one of then finished
-        tokio::select! {
-            _ = to_tun => {},
-            _ = from_tun  => {}
-        };
-    }))
+    // Stop another when one of then finished
+    tokio::select! {
+        _ = to_tun => {},
+        _ = from_tun  => {}
+    };
+    Ok(())
 }
