@@ -56,7 +56,7 @@ trait AsyncStream: AsyncRead + AsyncWrite {}
 impl AsyncStream for DuplexStream {}
 impl AsyncStream for TcpStream {}
 
-#[tokio::main]
+#[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<()> {
     env_logger::init_from_env(
         env_logger::Env::default().filter_or(env_logger::DEFAULT_FILTER_ENV, "info"),
