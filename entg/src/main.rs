@@ -52,29 +52,10 @@ async fn main() -> Result<()> {
 
     let args = Args::parse();
 
-    let task1 = async {
-        let tcp_stream = get_enta_stream(args.enta_listen).await?;
-        let stream: Pin<Box<dyn AsyncStream>> = if args.enta_rats_tls {
-            Box::pin(upgrade_to_rats_tls(tcp_stream, true).await?)
-        } else {
-            Box::pin(tcp_stream)
-        };
-        Result::<_, anyhow::Error>::Ok(stream)
-    };
-
+    let task1 = get_enta_stream(args.enta_listen, args.enta_rats_tls);
     tokio::pin!(task1);
 
-    let task2 = async {
-        // TODO: replace `is_server` with the options to select attester and verifier
-        let is_server = args.entg_connect.is_none();
-        let tcp_stream = get_entg_stream(args.entg_connect, args.entg_listen).await?;
-        let stream: Pin<Box<dyn AsyncStream>> = if args.entg_rats_tls {
-            Box::pin(upgrade_to_rats_tls(tcp_stream, is_server).await?)
-        } else {
-            Box::pin(tcp_stream)
-        };
-        Result::<_, anyhow::Error>::Ok(stream)
-    };
+    let task2 = get_entg_stream(args.entg_connect, args.entg_listen, args.entg_rats_tls);
     tokio::pin!(task2);
 
     let mut enta_stream = None;
@@ -108,11 +89,21 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-async fn get_enta_stream(enta_listen_port: u16) -> Result<TcpStream> {
+async fn get_enta_stream(
+    enta_listen_port: u16,
+    enta_rats_tls: bool,
+) -> Result<Pin<Box<dyn AsyncStream>>> {
     info!("Waiting for ENTA on port {}", enta_listen_port);
-    let stream = listen_on_port(enta_listen_port).await?;
-    info!("Connection received from ENTA: {}", stream.peer_addr()?);
-    Result::<TcpStream>::Ok(stream)
+    let tcp_stream = listen_on_port(enta_listen_port).await?;
+    info!("Connection received from ENTA: {}", tcp_stream.peer_addr()?);
+    let stream: Pin<Box<dyn AsyncStream>> = if enta_rats_tls {
+        let stream = Box::pin(upgrade_to_rats_tls(tcp_stream, true).await?);
+        info!("Rats-tls channel with ENTA is established");
+        stream
+    } else {
+        Box::pin(tcp_stream)
+    };
+    Ok(stream)
 }
 
 async fn upgrade_to_rats_tls(stream: TcpStream, server: bool) -> Result<DuplexStream> {
@@ -144,8 +135,15 @@ async fn upgrade_to_rats_tls(stream: TcpStream, server: bool) -> Result<DuplexSt
         .context("Failed in rats-tls negotiation")
 }
 
-async fn get_entg_stream(entg_connect: Option<String>, entg_listen_port: u16) -> Result<TcpStream> {
-    Result::<TcpStream>::Ok(match entg_connect {
+async fn get_entg_stream(
+    entg_connect: Option<String>,
+    entg_listen_port: u16,
+    entg_rats_tls: bool,
+) -> Result<Pin<Box<dyn AsyncStream>>> {
+    // TODO: replace `is_server` with the options to select attester and verifier
+    let is_server = entg_connect.is_none();
+
+    let tcp_stream = match entg_connect {
         Some(entg_connect) => {
             info!("Connect to the peer ENTG: {}", entg_connect);
             let stream = connect_to(entg_connect).await?;
@@ -158,7 +156,16 @@ async fn get_entg_stream(entg_connect: Option<String>, entg_listen_port: u16) ->
             info!("Connection received from ENTG: {}", stream.peer_addr()?);
             stream
         }
-    })
+    };
+
+    let stream: Pin<Box<dyn AsyncStream>> = if entg_rats_tls {
+        let stream = Box::pin(upgrade_to_rats_tls(tcp_stream, is_server).await?);
+        info!("Rats-tls channel with ENTG is established");
+        stream
+    } else {
+        Box::pin(tcp_stream)
+    };
+    Ok(stream)
 }
 
 async fn listen_on_port(port: u16) -> Result<TcpStream> {
