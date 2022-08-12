@@ -22,7 +22,7 @@ clean_up(){
 
     ip link del entg_c_out 2>&- || true
 
-    iptables -t nat -D POSTROUTING -s 192.168.254.4/30 '!' -o entg_c_out -j MASQUERADE 2>&- || true
+    iptables -t nat -D POSTROUTING -s 192.168.254.6/30 '!' -o entg_c_out -j MASQUERADE 2>&- || true
     iptables -t filter -D FORWARD -i any -o entg_c_out -j ACCEPT 2>&- || true
     iptables -t filter -D FORWARD -i entg_c_out -o entg_c_out -j ACCEPT 2>&- || true
     iptables -t filter -D FORWARD -i entg_c_out '!' -o entg_c_out -j ACCEPT 2>&- || true
