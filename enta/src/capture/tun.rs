@@ -84,6 +84,7 @@ pub async fn exchange_with_tun(
         loop {
             match income_rx.recv().await {
                 Some(packet) => {
+                    debug!("=> tun: {} bytes packet", packet.len());
                     if let Err(e) = split_sink.send(TunPacket::new(packet.into())).await {
                         error!("Failed to send IP packet to TUN device: {}", e);
                         break;
@@ -101,7 +102,7 @@ pub async fn exchange_with_tun(
         while let Some(frame) = split_stream.next().await {
             match frame {
                 Ok(packet) => {
-                    debug!("IP Packet from TUN device {:?}", packet);
+                    debug!("<= tun: {} bytes packet", packet.get_bytes().len());
                     // TODO: fix double copy here
                     if let Err(e) = outcome_tx
                         .send(Bytes::from(packet.get_bytes().to_owned()))

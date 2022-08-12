@@ -113,6 +113,7 @@ dependencies = [
  "env_logger",
  "futures",
  "log",
+ "rats-tls",
  "tokio",
  "tokio-util 0.7.3",
  "tun",
