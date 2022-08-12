@@ -14,13 +14,13 @@ tmux send-keys -t eng:0.0 \
     "exec ip netns exec enta_c bash" ENTER \
         'PS1=(enta_c)${PS1}' ENTER \
         "sleep 8.5" ENTER \
-        "$(dirname $0)/../target/debug/enta --mode client --entg-connect 172.31.254.1:6980 --tun-addr 192.168.0.1 --tun-mask 255.255.255.0" ENTER \
+        "RUST_LOG=debug $(dirname $0)/../target/debug/enta --mode client --entg-connect 172.31.254.1:6980 --tun-addr 192.168.0.1 --tun-mask 255.255.255.0" ENTER \
 
 tmux send-keys -t eng:0.1 \
     "exec ip netns exec enta_s bash" ENTER \
         'PS1=(enta_s)${PS1}' ENTER \
         "sleep 8" ENTER \
-        "$(dirname $0)/../target/debug/enta --mode server --entg-connect 172.31.254.1:6980 --tun-addr 192.168.0.254 --tun-mask 255.255.255.0" ENTER
+        "RUST_LOG=debug $(dirname $0)/../target/debug/enta --mode server --entg-rats-tls --entg-connect 172.31.254.1:6980 --tun-addr 192.168.0.254 --tun-mask 255.255.255.0" ENTER
 
 tmux send-keys -t eng:0.2 \
     "exec ip netns exec entg_c bash" ENTER \
@@ -30,7 +30,11 @@ tmux send-keys -t eng:0.2 \
 tmux send-keys -t eng:0.3 \
     "exec ip netns exec entg_s bash" ENTER \
         'PS1=(entg_s)${PS1}' ENTER \
-        "$(dirname $0)/../entg/run_on_occlum.sh --entg-rats-tls --entg-listen 6979 --enta-listen 6980" ENTER
+        "$(dirname $0)/../entg/run_on_occlum.sh --entg-rats-tls --entg-listen 6979 --enta-rats-tls --enta-listen 6980" ENTER
+
+tmux send-keys -t eng:0.4 \
+    "sleep 9" ENTER \
+    "ip netns exec enta_c ping 192.168.0.254" ENTER
 
 tmux a -t eng
 

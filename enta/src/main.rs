@@ -2,11 +2,14 @@ mod capture;
 mod packet;
 
 use std::net::IpAddr;
+use std::pin::Pin;
 
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use clap::{Parser, ValueEnum};
 use futures::{SinkExt, StreamExt};
-use log::{error, info};
+use log::{debug, error, info};
+use rats_tls::RatsTls;
+use tokio::io::{AsyncRead, AsyncWrite, DuplexStream};
 use tokio::sync::mpsc;
 use tokio::{
     net::TcpStream,
@@ -31,6 +34,11 @@ struct Args {
     #[clap(long, value_parser, default_value = "255.255.255.0")]
     tun_mask: IpAddr,
 
+    /// Establish rats-tls connection with entg
+    #[clap(long, value_parser, default_value_t = false)]
+    entg_rats_tls: bool,
+
+    // TODO: add options like `--capture`
     ///
     #[clap(long, value_parser)]
     mode: EntaMode,
@@ -43,6 +51,11 @@ pub enum EntaMode {
     Server,
 }
 
+trait AsyncStream: AsyncRead + AsyncWrite {}
+
+impl AsyncStream for DuplexStream {}
+impl AsyncStream for TcpStream {}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     env_logger::init_from_env(
@@ -50,7 +63,7 @@ async fn main() -> Result<()> {
     );
 
     let args = Args::parse();
-    let stream = connect_to_entg(&args.entg_connect).await?;
+    let stream = connect_to_entg(&args.entg_connect, args.entg_rats_tls).await?;
     let dev = capture::tun::setup_tun(args.tun_addr, args.tun_mask, args.mode).await?;
 
     let (outcome_tx, outcome_rx) = mpsc::channel(128);
@@ -62,7 +75,10 @@ async fn main() -> Result<()> {
     first.and(second)
 }
 
-async fn connect_to_entg(entg_connect: &str) -> Result<TcpStream> {
+async fn connect_to_entg(
+    entg_connect: &str,
+    entg_rats_tls: bool,
+) -> Result<Pin<Box<dyn AsyncStream>>> {
     info!("Connecting to ENTG");
     let stream = TcpStream::connect(entg_connect)
         .await
@@ -71,14 +87,39 @@ async fn connect_to_entg(entg_connect: &str) -> Result<TcpStream> {
         "Connection with ENTG is established, peer address: {}",
         stream.peer_addr()?
     );
-    Ok(stream)
+    if entg_rats_tls {
+        let stream = upgrade_to_rats_tls(stream).await?;
+        info!("Rats-tls channel with ENTG is established");
+        Ok(Box::pin(stream))
+    } else {
+        Ok(Box::pin(stream))
+    }
 }
 
-async fn exchange_with_entg(
-    stream: TcpStream,
+async fn upgrade_to_rats_tls(stream: TcpStream) -> Result<DuplexStream> {
+    let tls = RatsTls::new(
+        false,
+        0,
+        Some("openssl"),
+        Some("openssl"),
+        Some("nullattester"),
+        Some("sgx_ecdsa"),
+        false,
+    )
+    .map_err(|err| anyhow!("Failed to init rats-tls: error {:#x}", err))?;
+
+    tls.negotiate_async(stream)
+        .await
+        .context("Failed in rats-tls negotiation")
+}
+
+async fn exchange_with_entg<T>(
+    stream: T,
     income_tx: Sender<ENPacket>,
     mut outcome_rx: Receiver<ENPacket>,
 ) -> Result<()>
+where
+    T: AsyncRead + AsyncWrite + 'static,
 {
     let (mut split_sink, mut split_stream) =
         Framed::new(stream, LengthDelimitedCodec::new()).split();
@@ -86,6 +127,7 @@ async fn exchange_with_entg(
         loop {
             match outcome_rx.recv().await {
                 Some(packet) => {
+                    debug!("=> entg: {} bytes packet", packet.len());
                     if let Err(e) = split_sink.send(packet.into()).await {
                         error!("Failed to send data to ENTG: {}", e);
                         break;
@@ -103,6 +145,7 @@ async fn exchange_with_entg(
         loop {
             match split_stream.next().await {
                 Some(Ok(packet)) => {
+                    debug!("<= entg: {} bytes packet", packet.len());
                     if let Err(e) = income_tx.send(packet.freeze()).await {
                         info!(
                             "All capturers are closed. We will drop the subsequent packets from ENTG: {}",

@@ -27,6 +27,13 @@ clean_up(){
     iptables -t filter -D FORWARD -i entg_c_out -o entg_c_out -j ACCEPT 2>&- || true
     iptables -t filter -D FORWARD -i entg_c_out '!' -o entg_c_out -j ACCEPT 2>&- || true
 
+   ip link del enta_s_out 2>&- || true
+
+    iptables -t nat -D POSTROUTING -s 192.168.254.10/30 '!' -o enta_s_out -j MASQUERADE 2>&- || true
+    iptables -t filter -D FORWARD -i any -o enta_s_out -j ACCEPT 2>&- || true
+    iptables -t filter -D FORWARD -i enta_s_out -o enta_s_out -j ACCEPT 2>&- || true
+    iptables -t filter -D FORWARD -i enta_s_out '!' -o enta_s_out -j ACCEPT 2>&- || true
+
 }
 
 clean_up
@@ -99,6 +106,19 @@ ip netns exec enta_s ip link set lo up
 ip netns exec enta_s ip link set eth0 up
 ip netns exec enta_s ip addr add 172.16.0.1/16 dev eth0
 ip netns exec enta_s ip route add 172.31.254.1/32 dev eth0
+# internet for enta_s
+ip link add enta_s_out type veth peer name enta_s_in
+ip link set enta_s_in netns enta_s name enta_s_in
+ip netns exec enta_s ip link set enta_s_in up
+ip netns exec enta_s ip addr add 192.168.254.10/30 dev enta_s_in
+ip netns exec enta_s ip route add default via 192.168.254.9
+ip link set enta_s_out up
+ip addr add 192.168.254.9/30 dev enta_s_out
+echo 1 > /proc/sys/net/ipv4/ip_forward
+iptables -t nat -A POSTROUTING -s 192.168.254.10/30 '!' -o enta_s_out -j MASQUERADE
+iptables -t filter -A FORWARD -i any -o enta_s_out -j ACCEPT
+iptables -t filter -A FORWARD -i enta_s_out -o enta_s_out -j ACCEPT
+iptables -t filter -A FORWARD -i enta_s_out '!' -o enta_s_out -j ACCEPT
 
 
 trap EXIT
