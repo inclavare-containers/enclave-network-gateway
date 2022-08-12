@@ -11,14 +11,14 @@ enta: rats-tls-host
 entg-occlum: rats-tls-occlum
 	$(info Build entg-occlum)
 	cargo build --package entg --features occlum
-	rm target/debug/entg-occlum
+	rm -rf target/debug/entg-occlum
 	mv target/debug/entg target/debug/entg-occlum
 
 .PHONY: entg-host
 entg-host: rats-tls-host
 	$(info Build entg-host)
 	cargo build --package entg --features host
-	rm target/debug/entg-host
+	rm -rf target/debug/entg-host
 	mv target/debug/entg target/debug/entg-host
 
 .PHONY: rats-tls
@@ -43,7 +43,6 @@ rats-tls-host:
 rats-tls-clean:
 	cd deps/rats-tls; \
 		rm -rf build build-occlum build-host; \
-		rm -rf src/external/sgx-ssl/intel-sgx-ssl src/external/sgx-ssl/*.cmake src/external/sgx-ssl/*.sh
 
 .PHONY: demo
 demo: build
