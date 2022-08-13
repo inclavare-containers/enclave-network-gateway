@@ -45,9 +45,18 @@ rats-tls-clean:
 		rm -rf build build-occlum build-host; \
 
 .PHONY: demo
-demo: build
+demo: build echosvr
 	scripts/run_tmux.sh
 
 .PHONY: clean
-clean: rats-tls-clean
+clean: rats-tls-clean echosvr-clean
 	cargo clean
+	rm -rf entg/occlum_instance
+
+.PHONY: echosvr
+echosvr:
+	cd examples/echosvr; cargo build
+
+.PHONY: echosvr-clean
+echosvr-clean:
+	cd examples/echosvr; cargo clean

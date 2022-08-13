@@ -117,6 +117,10 @@ async fn run_echo_server(args: Args) -> Result<()> {
                         break Err(e).context("Failed to receive data from client");
                     }
                 };
+                println!(
+                    "Data received from client: {}",
+                    String::from_utf8_lossy(&buf[0..n])
+                );
 
                 // Write the data back
                 if let Err(e) = stream.write_all(&buf[0..n]).await {
