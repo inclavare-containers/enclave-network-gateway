@@ -82,6 +82,45 @@ async fn setup_netfilter(capture: Option<u16>, replay: Option<u16>) -> Result<()
     Ok(())
 }
 
+pub async fn clean_up(capture: Option<u16>, replay: Option<u16>) -> Result<()> {
+    info!("Clean up before exiting");
+    if let Some(capture) = capture {
+        let mut cmd = Command::new("/bin/sh");
+        let scripts = format!("iptables -t nat -D OUTPUT -p tcp --dport {} -j DNAT --to-destination 192.168.0.254:6978 ; \
+                ip route flush table 8 ; \
+                ip rule flush table 8 ; \
+                ip route flush cache", capture);
+        cmd.args(["-c", &scripts]); // remove "-e" here to allow command to fail
+        let output = cmd.output().await?;
+        ensure!(
+            output.status.success(),
+            "cmd failed: '{:?}' \nstatus: {:?}\nstderr: {}",
+            cmd,
+            output.status.code(),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    if let Some(replay) = replay {
+        let mut cmd = Command::new("/bin/sh");
+        let scripts = format!(
+            "iptables -t nat -D PREROUTING -p tcp --dport 6978 -j REDIRECT --to-port {}",
+            replay
+        );
+        cmd.args(["-c", &scripts]);
+        let output = cmd.output().await?;
+        ensure!(
+            output.status.success(),
+            "cmd failed: '{:?}' \nstatus: {:?}\nstderr: {}",
+            cmd,
+            output.status.code(),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    Ok(())
+}
+
 pub async fn exchange_with_tun(
     dev: AsyncDevice,
     outcome_tx: Sender<ENPacket>,
