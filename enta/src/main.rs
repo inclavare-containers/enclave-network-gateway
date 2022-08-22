@@ -7,7 +7,7 @@ use std::pin::Pin;
 use anyhow::{anyhow, Context, Result};
 use clap::Parser;
 use futures::{SinkExt, StreamExt};
-use log::{debug, error, info};
+use log::{debug, error, info, warn};
 use rats_tls::RatsTls;
 use tokio::io::{AsyncRead, AsyncWrite, DuplexStream};
 use tokio::sync::mpsc;
@@ -59,6 +59,19 @@ async fn main() -> Result<()> {
     );
 
     let args = Args::parse();
+    let capture = args.capture;
+    let replay = args.replay;
+
+    let result = run(args).await;
+
+    // Clean up before program exit
+    if let Err(err) = capture::tun::clean_up(capture, replay).await {
+        warn!("Failed to clean up: {}", err);
+    }
+    result
+}
+
+async fn run(args: Args) -> Result<()> {
     let stream = connect_to_entg(&args.entg_connect, args.entg_rats_tls).await?;
     let dev =
         capture::tun::setup_tun(args.tun_addr, args.tun_mask, args.capture, args.replay).await?;
@@ -68,8 +81,11 @@ async fn main() -> Result<()> {
     let task1 = exchange_with_entg(stream, income_tx, outcome_rx);
     let task2 = capture::tun::exchange_with_tun(dev, outcome_tx, income_rx);
 
-    let (first, second) = tokio::join!(task1, task2);
-    first.and(second)
+    let handle = async { tokio::join!(task1, task2) };
+    tokio::select! {
+        (first, second) = handle => { first.and(second) }
+        _ = tokio::signal::ctrl_c() => { Ok(()) }
+    }
 }
 
 async fn connect_to_entg(
