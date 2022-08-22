@@ -9,9 +9,13 @@ use tokio::sync::mpsc::{Receiver, Sender};
 use tun::{AsyncDevice, Layer, TunPacket};
 
 use crate::packet::ENPacket;
-use crate::EntaMode;
 
-pub async fn setup_tun(tun_addr: IpAddr, tun_mask: IpAddr, mode: EntaMode) -> Result<AsyncDevice> {
+pub async fn setup_tun(
+    tun_addr: IpAddr,
+    tun_mask: IpAddr,
+    capture: Option<u16>,
+    replay: Option<u16>,
+) -> Result<AsyncDevice> {
     info!("Setting up TUN device");
 
     let mut config = tun::Configuration::default();
@@ -34,42 +38,47 @@ pub async fn setup_tun(tun_addr: IpAddr, tun_mask: IpAddr, mode: EntaMode) -> Re
     }
 
     // Setup iptables rules
-    setup_netfilter(mode)
+    setup_netfilter(capture, replay)
         .await
         .context("Failed to setup netfilter")?;
     dev
 }
 
-async fn setup_netfilter(mode: EntaMode) -> Result<()> {
-    let mut cmd = Command::new("/bin/sh");
-    match mode {
-        EntaMode::Client => {
-            cmd.args([
-                "-e",
-                "-c",
-                "iptables -t nat -A OUTPUT -p tcp --dport 7 -j DNAT --to-destination 192.168.0.254:6978 ; \
-                ip route add default via 192.168.0.1 table 8 ; \
-                ip rule add dport 7 table 8 ; \
-                ip route flush cache",
-            ]);
-        }
-        EntaMode::Server => {
-            cmd.args([
-                "-e",
-                "-c",
-                "iptables -t nat -A PREROUTING -p tcp --dport 6978 -j REDIRECT --to-port 7",
-            ]);
-        }
-    };
+async fn setup_netfilter(capture: Option<u16>, replay: Option<u16>) -> Result<()> {
+    // Since netfilter does not provide a stable library to manipulate the rules, we use system() to execute the `iptables` binary.
+    if let Some(capture) = capture {
+        let mut cmd = Command::new("/bin/sh");
+        let scripts = format!("iptables -t nat -A OUTPUT -p tcp --dport {} -j DNAT --to-destination 192.168.0.254:6978 ; \
+            ip route add default via 192.168.0.1 table 8 ; \
+            ip rule add dport {} table 8 ; \
+            ip route flush cache", capture, capture);
+        cmd.args(["-e", "-c", &scripts]);
+        let output = cmd.output().await?;
+        ensure!(
+            output.status.success(),
+            "cmd failed: '{:?}' \nstatus: {:?}\nstderr: {}",
+            cmd,
+            output.status.code(),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
 
-    let output = cmd.output().await?;
-    ensure!(
-        output.status.success(),
-        "cmd failed: '{:?}' \nstatus: {:?}\nstderr: {}",
-        cmd,
-        output.status.code(),
-        String::from_utf8_lossy(&output.stderr)
-    );
+    if let Some(replay) = replay {
+        let mut cmd = Command::new("/bin/sh");
+        let scripts = format!(
+            "iptables -t nat -A PREROUTING -p tcp --dport 6978 -j REDIRECT --to-port {}",
+            replay
+        );
+        cmd.args(["-e", "-c", &scripts]);
+        let output = cmd.output().await?;
+        ensure!(
+            output.status.success(),
+            "cmd failed: '{:?}' \nstatus: {:?}\nstderr: {}",
+            cmd,
+            output.status.code(),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
     Ok(())
 }
 

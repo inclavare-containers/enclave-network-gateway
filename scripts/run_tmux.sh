@@ -14,13 +14,13 @@ tmux send-keys -t eng:0.0 \
     "exec ip netns exec enta_c bash" ENTER \
         'PS1=(enta_c)${PS1}' ENTER \
         "sleep 8.5" ENTER \
-        "RUST_LOG=debug $(dirname $0)/../target/debug/enta --mode client --entg-connect 172.31.254.1:6980 --tun-addr 192.168.0.1 --tun-mask 255.255.255.0" ENTER \
+        "RUST_LOG=debug $(dirname $0)/../target/debug/enta --capture 7 --entg-connect 172.31.254.1:6980 --tun-addr 192.168.0.1 --tun-mask 255.255.255.0" ENTER \
 
 tmux send-keys -t eng:0.1 \
     "exec ip netns exec enta_s bash" ENTER \
         'PS1=(enta_s)${PS1}' ENTER \
         "sleep 8" ENTER \
-        "RUST_LOG=debug $(dirname $0)/../target/debug/enta --mode server --entg-rats-tls --entg-connect 172.31.254.1:6980 --tun-addr 192.168.0.254 --tun-mask 255.255.255.0" ENTER
+        "RUST_LOG=debug $(dirname $0)/../target/debug/enta --replay 7 --entg-rats-tls --entg-connect 172.31.254.1:6980 --tun-addr 192.168.0.254 --tun-mask 255.255.255.0" ENTER
 
 tmux send-keys -t eng:0.2 \
     "exec ip netns exec entg_c bash" ENTER \
