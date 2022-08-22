@@ -5,7 +5,7 @@ use std::net::IpAddr;
 use std::pin::Pin;
 
 use anyhow::{anyhow, Context, Result};
-use clap::{Parser, ValueEnum};
+use clap::Parser;
 use futures::{SinkExt, StreamExt};
 use log::{debug, error, info};
 use rats_tls::RatsTls;
@@ -38,17 +38,13 @@ struct Args {
     #[clap(long, value_parser, default_value_t = false)]
     entg_rats_tls: bool,
 
-    // TODO: add options like `--capture`
-    ///
+    /// The dport of the packet that needs to be captured. This option is set on the client side.
     #[clap(long, value_parser)]
-    mode: EntaMode,
-}
+    capture: Option<u16>, // TODO: capture more than one dport
 
-// TODO: Do not distinguish between client and server
-#[derive(ValueEnum, Copy, Clone, Debug)]
-pub enum EntaMode {
-    Client,
-    Server,
+    /// The dport of the packet to be replayed, corresponding to the capture. This option is set on the server side.
+    #[clap(long, value_parser)]
+    replay: Option<u16>,
 }
 
 trait AsyncStream: AsyncRead + AsyncWrite {}
@@ -64,7 +60,8 @@ async fn main() -> Result<()> {
 
     let args = Args::parse();
     let stream = connect_to_entg(&args.entg_connect, args.entg_rats_tls).await?;
-    let dev = capture::tun::setup_tun(args.tun_addr, args.tun_mask, args.mode).await?;
+    let dev =
+        capture::tun::setup_tun(args.tun_addr, args.tun_mask, args.capture, args.replay).await?;
 
     let (outcome_tx, outcome_rx) = mpsc::channel(128);
     let (income_tx, income_rx) = mpsc::channel(128);
