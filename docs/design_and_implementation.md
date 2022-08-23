@@ -20,7 +20,7 @@ Since TCP connections are byte-stream oriented and `ENPacket` is frame-by-frame,
 
 ### Capturing packets
 
-Currently ENTA supports capturing packets from Host APP with TUN device. For ease of illustration, we refer to the ENTA on the APP Client side as the ENTA Client and the ENTA on the APP Server side as the ENTA Server. assume that the dport of TCP packet expected to be captured is 7.
+Currently ENTA supports capturing packets from Host APP with TUN device. For ease of illustration, we refer to the ENTA on the APP Client side as the ENTA Client and the ENTA on the APP Server side as the ENTA Server. Assume that the dport of TCP packet expected to be captured is 7.
 
 The capturing approach requires the collaboration of both side.
 1. Both ENTA Client and ENTA Server create TUN devices and initialize the IP addresses as `192.168.0.1/24` and `192.168.0.254/24` respectively.
@@ -45,7 +45,7 @@ In the current design, ENTG has two build targets: entg-host and entg-occlum. th
 
 Both ENTA and ENTG can use the optional rats-tls connection to replace the normal tcp connection. For this purpose we designed rats-tls, a crate, to call `librats_tls.so` from Rust by way of ffi.
 
-The API interface provided by librats_tls is synchronous blocking IO. To combine it with asynchronous code in ENTG, we also designed the `RatsTls::negotiate_async()` function. It exposes an asynchronous interface. In the internal it will spawn two tokio blocking threads in which to run `rats_tls_receive()` and `rats_tls_transmit()`. The advantage of this design is that it has the same interface as a normal TCP connection (`TCPStream`). Both implement `tokio::io::AsyncRead` and `tokio::io::AsyncWrite`. By using the trait object feature in Rust, the connection type can be eliminated from the logic of data stream forwarding.
+The API interface provided by librats\_tls is synchronous blocking IO. To combine it with asynchronous code in ENTG, we also designed the `RatsTls::negotiate_async()` function. It exposes an asynchronous interface. In the internal it will spawn two tokio blocking threads in which to run `rats_tls_receive()` and `rats_tls_transmit()`. The advantage of this design is that it has the same interface as a normal TCP connection (`TCPStream`). Both implement `tokio::io::AsyncRead` and `tokio::io::AsyncWrite`. By using the trait object feature in Rust, the connection type can be eliminated from the logic of data stream forwarding.
 
 ## examples
 

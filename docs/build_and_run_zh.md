@@ -9,7 +9,7 @@ target/debug/enta
 target/debug/entg-host
 target/debug/entg-occlum
 ```
-entg-host动态依赖系统中的`librats_tls.so`，可以直接运行。此外，我们提供了在occlum上运行entg-occlum的初始化脚本，请参考[entg/run_on_occlum.sh](../entg/run_on_occlum.sh)
+entg-host动态依赖系统中的`librats_tls.so`，可以直接运行。此外，我们提供了在occlum上运行entg-occlum的初始化脚本，请参考[entg/run\_on\_occlum.sh](../entg/run_on_occlum.sh)
 
 如要构建echosvr程序，请使用`make echosvr`，产物路径为
 
