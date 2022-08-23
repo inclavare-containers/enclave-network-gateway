@@ -76,10 +76,15 @@ async fn run(args: Args) -> Result<()> {
     let dev =
         capture::tun::setup_tun(args.tun_addr, args.tun_mask, args.capture, args.replay).await?;
 
-    let (outcome_tx, outcome_rx) = mpsc::channel(128);
-    let (income_tx, income_rx) = mpsc::channel(128);
-    let task1 = exchange_with_entg(stream, income_tx, outcome_rx);
-    let task2 = capture::tun::exchange_with_tun(dev, outcome_tx, income_rx);
+    // Create two channels as a bridge between tun device and entg. Data received 
+    // from entg will first be written to a channel named (inbound_tx,inbound_rx) 
+    // and then passed to the TUN device. In contrast, data from TUN device will 
+    // be put into a channel named (outbound_tx,outbound_rx) and then read out and 
+    // sent to entg.
+    let (outbound_tx, outbound_rx) = mpsc::channel(128);
+    let (inbound_tx, inbound_rx) = mpsc::channel(128);
+    let task1 = exchange_with_entg(stream, inbound_tx, outbound_rx);
+    let task2 = capture::tun::exchange_with_tun(dev, outbound_tx, inbound_rx);
 
     let handle = async { tokio::join!(task1, task2) };
     tokio::select! {
@@ -128,8 +133,8 @@ async fn upgrade_to_rats_tls(stream: TcpStream) -> Result<DuplexStream> {
 
 async fn exchange_with_entg<T>(
     stream: T,
-    income_tx: Sender<ENPacket>,
-    mut outcome_rx: Receiver<ENPacket>,
+    inbound_tx: Sender<ENPacket>,
+    mut outbound_rx: Receiver<ENPacket>,
 ) -> Result<()>
 where
     T: AsyncRead + AsyncWrite + 'static,
@@ -138,7 +143,7 @@ where
         Framed::new(stream, LengthDelimitedCodec::new()).split();
     let to_entg = async move {
         loop {
-            match outcome_rx.recv().await {
+            match outbound_rx.recv().await {
                 Some(packet) => {
                     debug!("=> entg: {} bytes packet", packet.len());
                     if let Err(e) = split_sink.send(packet.into()).await {
@@ -159,7 +164,7 @@ where
             match split_stream.next().await {
                 Some(Ok(packet)) => {
                     debug!("<= entg: {} bytes packet", packet.len());
-                    if let Err(e) = income_tx.send(packet.freeze()).await {
+                    if let Err(e) = inbound_tx.send(packet.freeze()).await {
                         info!(
                             "All capturers are closed. We will drop the subsequent packets from ENTG: {}",
                             e
