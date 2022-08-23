@@ -157,7 +157,10 @@ impl RatsTls {
             tokio::task::spawn_blocking(move || {
                 let mut rh = SyncIoBridge::new(rh);
                 let mut buf = vec![0; 1024];
-                while let Ok(r_len) = rh.read(&mut buf) {
+                'outer: while let Ok(r_len) = rh.read(&mut buf) {
+                    if r_len == 0 {
+                        break; // no more data to read
+                    }
                     let mut w_off = 0;
                     while w_off < r_len {
                         match rats_tls_session.0.transmit(&buf[w_off..r_len]) {
@@ -165,7 +168,7 @@ impl RatsTls {
                             Err(_err) => {
                                 // TODO: Better way to show error message
                                 // error!("Failed in rats-tls teansmit(): error {}", err);
-                                return;
+                                break 'outer;
                             }
                         };
                     }
