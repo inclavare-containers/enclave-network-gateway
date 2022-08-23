@@ -29,19 +29,17 @@ pub async fn setup_tun(
         config.packet_information(true);
     });
 
-    let dev = tun::create_as_async(&config).context("Failed to create tun device");
-    if dev.is_ok() {
-        info!(
-            "TUN device is ready, address: {} mask: {}",
-            tun_addr, tun_mask
-        );
-    }
+    let dev = tun::create_as_async(&config).context("Failed to create tun device")?;
+    info!(
+        "TUN device is ready, address: {} mask: {}",
+        tun_addr, tun_mask
+    );
 
     // Setup iptables rules
     setup_netfilter(capture, replay)
         .await
         .context("Failed to setup netfilter")?;
-    dev
+    Ok(dev)
 }
 
 async fn setup_netfilter(capture: Option<u16>, replay: Option<u16>) -> Result<()> {
