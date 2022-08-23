@@ -15,7 +15,7 @@ ENTA的代码实现中使用了Rust异步编程特性，我们的实现是基于
 
 为了降低代码耦合性，以及便于后续引入更多的捕获方式，捕获的数据包会被放入到一个[channel](https://docs.rs/tokio/1.20.1/tokio/sync/mpsc/fn.channel.html)中，再统一转发到ENTG。
 
-由于TCP连接是面向字节流的，而`ENPacket`是逐帧（Frame）的，在将`ENPacket`通过字节流发送给ENTG时，必须要采取一种方式进行分帧。简单起见我们使用了tokio_util中的[LengthDelimitedCodec](https://docs.rs/tokio-util/latest/tokio_util/codec/length_delimited/)模式，它的实现是在每一帧（每个ENPacket）的最前面添加帧的长度。
+由于TCP连接是面向字节流的，而`ENPacket`是逐帧（Frame）的，在将`ENPacket`通过字节流发送给ENTG时，必须要采取一种方式进行分帧。简单起见我们使用了tokio\_util中的[LengthDelimitedCodec](https://docs.rs/tokio-util/latest/tokio_util/codec/length_delimited/)模式，它的实现是在每一帧（每个ENPacket）的最前面添加帧的长度。
 
 ### 数据包捕获
 
@@ -44,7 +44,7 @@ ENTG负责对ENTA的数据包进行转发。
 
 ENTA和ENTG都允许使用rats-tls连接替代普通的tcp连接。为此我们设计了rats-tls这个crate，通过ffi的方式从Rust中调用`librats_tls.so`。
 
-由于librats_tls提供的API接口为同步阻塞IO，为了与ENTG的异步代码结合，我们还设计了`RatsTls::negotiate_async()`函数。它会spawn出两个tokio的阻塞线程（blocking thread），在其中中执行`rats_tls_receive()`和`rats_tls_transmit()`操作，并对外暴露出异步的接口。这种设计的好处是，普通的TCP连接（`TCPStream`）和rats-tls连接具有一样的接口（都实现了`tokio::io::AsyncRead`和`tokio::io::AsyncWrite`），借助trait object特性，在数据流转发的实现中便可无需考虑底层具体的连接类型。
+由于librats\_tls提供的API接口为同步阻塞IO，为了与ENTG的异步代码结合，我们还设计了`RatsTls::negotiate_async()`函数。它会spawn出两个tokio的阻塞线程（blocking thread），在其中中执行`rats_tls_receive()`和`rats_tls_transmit()`操作，并对外暴露出异步的接口。这种设计的好处是，普通的TCP连接（`TCPStream`）和rats-tls连接具有一样的接口（都实现了`tokio::io::AsyncRead`和`tokio::io::AsyncWrite`），借助trait object特性，在数据流转发的实现中便可无需考虑底层具体的连接类型。
 
 ## examples
 
