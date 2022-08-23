@@ -121,14 +121,14 @@ pub async fn clean_up(capture: Option<u16>, replay: Option<u16>) -> Result<()> {
 
 pub async fn exchange_with_tun(
     dev: AsyncDevice,
-    outcome_tx: Sender<ENPacket>,
-    mut income_rx: Receiver<ENPacket>,
+    outbound_tx: Sender<ENPacket>,
+    mut inbound_rx: Receiver<ENPacket>,
 ) -> Result<()> {
     let (mut split_sink, mut split_stream) = dev.into_framed().split();
 
     let to_tun = async move {
         loop {
-            match income_rx.recv().await {
+            match inbound_rx.recv().await {
                 Some(packet) => {
                     debug!("=> tun: {} bytes packet", packet.len());
                     if let Err(e) = split_sink.send(TunPacket::new(packet.into())).await {
@@ -137,7 +137,7 @@ pub async fn exchange_with_tun(
                     }
                 }
                 None => {
-                    debug!("Income channel closed, close TUN device now");
+                    debug!("Inbound channel closed, close TUN device now");
                     break;
                 }
             }
@@ -150,11 +150,11 @@ pub async fn exchange_with_tun(
                 Ok(packet) => {
                     debug!("<= tun: {} bytes packet", packet.get_bytes().len());
                     // TODO: fix double copy here
-                    if let Err(e) = outcome_tx
+                    if let Err(e) = outbound_tx
                         .send(Bytes::from(packet.get_bytes().to_owned()))
                         .await
                     {
-                        debug!("Outcome channel closed, close TUN device now: {}", e);
+                        debug!("Outbound Channel closed, close TUN device now: {}", e);
                         break;
                     }
                 }
