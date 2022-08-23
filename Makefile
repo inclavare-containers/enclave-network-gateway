@@ -46,7 +46,7 @@ rats-tls-clean:
 
 .PHONY: demo
 demo: build echosvr
-	scripts/run_tmux.sh
+	scripts/run_demo_tmux.sh
 
 .PHONY: clean
 clean: rats-tls-clean echosvr-clean

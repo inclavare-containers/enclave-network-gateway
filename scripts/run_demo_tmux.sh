@@ -4,7 +4,7 @@ set -o errexit  # Used to exit upon error, avoiding cascading errors
 set -o pipefail # Unveils hidden failures
 set -o nounset  # Exposes unset variables
 
-bash -x "$(dirname $0)/setup_netns.sh"
+bash -x "$(dirname $0)/demo_setup_netns.sh"
 
 tmux kill-session -t eng 2>&- || true
 tmux new -d -s eng
