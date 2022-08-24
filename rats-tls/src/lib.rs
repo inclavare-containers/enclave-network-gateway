@@ -2,14 +2,18 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  */
-use foreign_types::{ForeignType, ForeignTypeRef, Opaque};
 use std::io::{Read, Write};
+use std::net::Shutdown;
 use std::ops::{Deref, DerefMut};
 use std::os::unix::io::RawFd;
 use std::os::unix::prelude::AsRawFd;
+use std::pin::Pin;
 use std::ptr::NonNull;
 use std::sync::Arc;
-use tokio::io::DuplexStream;
+
+use foreign_types::{ForeignType, ForeignTypeRef, Opaque};
+use pin_project::{pin_project, pinned_drop};
+use tokio::io::{AsyncWrite, AsyncWriteExt, DuplexStream};
 use tokio::net::TcpStream;
 use tokio_util::io::SyncIoBridge;
 
@@ -152,8 +156,16 @@ impl RatsTls {
 
         let (rh, wh) = tokio::io::split(s1);
 
+        // Note that tasks spawned with spawn_blocking() cannot be canceled, and even `handle.abort()`
+        // will not work as expected. These tasks will continue to run until they are finished, and
+        // the main thread will wait for them. See https://docs.rs/tokio/latest/tokio/task/fn.spawn_blocking.html
+        //
+        // In rats-tls, our reader task will keep running until the peer shutdown the writer. One way
+        // to avoid this is to close the socket directly after timeout. Another way is to implement
+        // asynchronous mode for librats_tls.so to replace spawn_blocking.
         {
             let rats_tls_session = rats_tls_session.clone();
+            // Writer task of rats-tls
             tokio::task::spawn_blocking(move || {
                 let mut rh = SyncIoBridge::new(rh);
                 let mut buf = vec![0; 1024];
@@ -173,26 +185,35 @@ impl RatsTls {
                         };
                     }
                 }
+                let _ = rats_tls_session.1.shutdown(Shutdown::Write);
             });
         }
         {
+            // Reader task of rats-tls
             tokio::task::spawn_blocking(move || {
-                let mut wh = SyncIoBridge::new(wh);
+                let mut wh = SyncIoBridge::new(ShutdownOnDrop::new(wh));
                 let mut buf = vec![0; 1024];
                 loop {
                     match rats_tls_session.0.receive(&mut buf) {
                         Ok(r_len) => {
                             if wh.write_all(&buf[..r_len]).is_err() {
-                                return;
+                                break;
                             }
                         }
                         Err(_err) => {
                             // TODO: Better way to show error message
                             // error!("Failed in rats-tls receive(): error {}", err);
-                            return;
+                            break;
                         }
                     };
                 }
+                let _ = rats_tls_session.1.shutdown(Shutdown::Read);
+                // Once we are unable to receive more data from rats-tls, we need to shutdown the writer
+                // of DuplexStream. However, SyncIoBridge does not expose shutdown() function for its
+                // inner AsyncWrite instance currently, at the time I wrote this. So I use ShutdownOnDrop
+                // to achieve this.
+
+                // TODO: Deprecate ShutdownOnDrop, once shutdown() is added to SyncIoBridge. See https://github.com/tokio-rs/tokio/pull/4938
             });
         }
 
@@ -238,5 +259,51 @@ impl RatsTls {
         } else {
             Err(err)
         }
+    }
+}
+
+#[pin_project(PinnedDrop)]
+struct ShutdownOnDrop<T: AsyncWrite + Unpin> {
+    #[pin]
+    inner: T,
+    rt: tokio::runtime::Handle,
+}
+impl<T: AsyncWrite + Unpin> ShutdownOnDrop<T> {
+    fn new(inner: T) -> Self {
+        Self {
+            inner,
+            rt: tokio::runtime::Handle::current(),
+        }
+    }
+}
+
+impl<T: AsyncWrite + Unpin> AsyncWrite for ShutdownOnDrop<T> {
+    fn poll_write(
+        self: Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+        buf: &[u8],
+    ) -> std::task::Poll<Result<usize, std::io::Error>> {
+        self.project().inner.poll_write(cx, buf)
+    }
+
+    fn poll_flush(
+        self: Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), std::io::Error>> {
+        self.project().inner.poll_flush(cx)
+    }
+
+    fn poll_shutdown(
+        self: Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), std::io::Error>> {
+        self.project().inner.poll_shutdown(cx)
+    }
+}
+
+#[pinned_drop]
+impl<T: AsyncWrite + Unpin> PinnedDrop for ShutdownOnDrop<T> {
+    fn drop(mut self: Pin<&mut Self>) {
+        let _ = self.rt.clone().block_on(self.inner.shutdown());
     }
 }

@@ -4,7 +4,6 @@ use anyhow::{anyhow, Context, Result};
 use clap::{ArgGroup, Parser};
 use log::info;
 use rats_tls::RatsTls;
-// use rats_tls_sys::*;
 use tokio::{
     io::{AsyncRead, AsyncWrite, DuplexStream},
     net::{TcpListener, TcpStream},
