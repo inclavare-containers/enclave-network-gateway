@@ -9,3 +9,4 @@ edition = "2021"
 foreign-types = "0.5.0"
 tokio = { version = "1.19.2", features = ["full"] }
 tokio-util = { version = "0.7.3", features = ["io-util"] }
+pin-project = "1.0.12"
